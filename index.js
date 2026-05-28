@@ -20,7 +20,7 @@ const renderer = new THREE.WebGLRenderer({
 renderer.setSize(w, h);
 
 renderer.setPixelRatio(
-    window.devicePixelRatio
+    Math.min(window.devicePixelRatio, 2)
 );
 
 renderer.outputColorSpace =
@@ -29,7 +29,14 @@ THREE.SRGBColorSpace;
 renderer.toneMapping =
 THREE.ACESFilmicToneMapping;
 
-renderer.toneMappingExposure = 1.5;
+renderer.toneMappingExposure = 1.1;
+
+/* realistic shadows */
+
+renderer.shadowMap.enabled = true;
+
+renderer.shadowMap.type =
+THREE.PCFSoftShadowMap;
 
 document.body.appendChild(
     renderer.domElement
@@ -42,21 +49,27 @@ const scene = new THREE.Scene();
 scene.background =
 new THREE.Color(0x000000);
 
+/* cinematic fog */
+
+scene.fog = new THREE.Fog(
+    0x000000,
+    6,
+    12
+);
+
 /* ---------------- CAMERA ---------------- */
 
 const camera =
 new THREE.PerspectiveCamera(
-
-    45,
+    28,
     w / h,
     0.1,
     100
-
 );
 
-camera.position.set(0,0,5);
+camera.position.set(0,0.3,4);
 
-/* ---------------- EXR ---------------- */
+/* ---------------- HDRI ---------------- */
 
 const exrLoader = new EXRLoader();
 
@@ -77,39 +90,98 @@ exrLoader.load(
 
 /* ---------------- LIGHTS ---------------- */
 
-const light1 =
-new THREE.DirectionalLight(
+/* Main cinematic spotlight */
+
+const keyLight =
+new THREE.SpotLight(
     0xffffff,
-    5
+    40
 );
 
-light1.position.set(5,5,5);
+keyLight.position.set(2,4,3);
 
-scene.add(light1);
+keyLight.angle = 0.3;
 
-const light2 =
-new THREE.DirectionalLight(
+keyLight.penumbra = 1;
+
+keyLight.decay = 2;
+
+keyLight.distance = 20;
+
+keyLight.castShadow = true;
+
+keyLight.shadow.mapSize.width = 2048;
+
+keyLight.shadow.mapSize.height = 2048;
+
+scene.add(keyLight);
+
+/* Rim light */
+
+const rimLight =
+new THREE.SpotLight(
     0xffffff,
-    3
+    12
 );
 
-light2.position.set(-5,3,-5);
+rimLight.position.set(-3,2,-2);
 
-scene.add(light2);
+rimLight.angle = 0.4;
+
+rimLight.penumbra = 1;
+
+scene.add(rimLight);
+
+/* Soft ambient */
 
 const ambient =
 new THREE.AmbientLight(
     0xffffff,
-    1
+    0.15
 );
 
 scene.add(ambient);
+
+/* ---------------- FLOOR ---------------- */
+
+const floorGeo =
+new THREE.PlaneGeometry(
+    20,
+    20
+);
+
+const floorMat =
+new THREE.MeshStandardMaterial({
+
+    color: 0x050505,
+
+    roughness: 0.15,
+
+    metalness: 0.6
+
+});
+
+const floor =
+new THREE.Mesh(
+    floorGeo,
+    floorMat
+);
+
+floor.rotation.x =
+-Math.PI / 2;
+
+floor.position.y = -1.8;
+
+floor.receiveShadow = true;
+
+scene.add(floor);
 
 /* ---------------- MODEL ---------------- */
 
 let model;
 
-const loader = new GLTFLoader();
+const loader =
+new GLTFLoader();
 
 loader.load(
 
@@ -123,6 +195,46 @@ loader.load(
 
         model.position.set(0,-1,0);
 
+        model.rotation.y = Math.PI;
+
+        model.traverse(function(child){
+
+            if(child.isMesh){
+
+                child.castShadow = true;
+
+                child.receiveShadow = true;
+
+                if(child.material){
+
+                    /* realistic black plastic */
+
+                    child.material.roughness = 0.82;
+
+                    child.material.metalness = 0.08;
+
+                    child.material.envMapIntensity = 3;
+
+                    /* premium reflections */
+
+                    child.material.clearcoat = 0.25;
+
+                    child.material.clearcoatRoughness = 0.4;
+
+                    child.material.reflectivity = 0.6;
+
+                    /* deep black */
+
+                    child.material.color.set(
+                        0x111111
+                    );
+
+                }
+
+            }
+
+        });
+
         scene.add(model);
 
         console.log(model);
@@ -132,9 +244,12 @@ loader.load(
     function(progress){
 
         console.log(
+
             ((progress.loaded /
             progress.total) * 100)
+
             + "% loaded"
+
         );
 
     },
@@ -151,15 +266,32 @@ loader.load(
 
 function animate(){
 
-    requestAnimationFrame(animate);
+    requestAnimationFrame(
+        animate
+    );
 
     if(model){
 
-        model.rotation.y += 0.01;
+        /* slow cinematic rotation */
+
+        model.rotation.y += 0.002;
+
+        /* subtle floating motion */
+
+        model.position.y =
+
+        -1 +
+
+        Math.sin(
+            Date.now() * 0.001
+        ) * 0.03;
 
     }
 
-    renderer.render(scene,camera);
+    renderer.render(
+        scene,
+        camera
+    );
 
 }
 
@@ -168,7 +300,9 @@ animate();
 /* ---------------- RESIZE ---------------- */
 
 window.addEventListener(
+
     "resize",
+
     () => {
 
         camera.aspect =
@@ -183,4 +317,5 @@ window.addEventListener(
         );
 
     }
+
 );
