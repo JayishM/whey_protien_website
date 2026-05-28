@@ -1,2 +1,2 @@
 # whey_protien_website
-Made By Jayish Nad Manit
+Made By Jayish And Manit
